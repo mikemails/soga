@@ -47,36 +47,50 @@ if [ "$(getconf WORD_BIT)" != '32' ] && [ "$(getconf LONG_BIT)" != '64' ] ; then
     exit 2
 fi
 
-os_version=""
+#os_version=""
+#
+## os version
+#if [[ -f /etc/os-release ]]; then
+#    os_version=$(awk -F'[= ."]' '/VERSION_ID/{print $3}' /etc/os-release)
+#fi
+#if [[ -z "$os_version" && -f /etc/lsb-release ]]; then
+#    os_version=$(awk -F'[= ."]+' '/DISTRIB_RELEASE/{print $2}' /etc/lsb-release)
+#fi
+#
+#if [[ x"${release}" == x"centos" ]]; then
+#    if [[ ${os_version} -le 6 ]]; then
+#        echo -e "${red}请使用 CentOS 7 或更高版本的系统！${plain}\n" && exit 1
+#    fi
+#elif [[ x"${release}" == x"ubuntu" ]]; then
+#    if [[ ${os_version} -lt 16 ]]; then
+#        echo -e "${red}请使用 Ubuntu 16 或更高版本的系统！${plain}\n" && exit 1
+#    fi
+#elif [[ x"${release}" == x"debian" ]]; then
+#    if [[ ${os_version} -lt 8 ]]; then
+#        echo -e "${red}请使用 Debian 8 或更高版本的系统！${plain}\n" && exit 1
+#    fi
+#fi
 
-# os version
-if [[ -f /etc/os-release ]]; then
-    os_version=$(awk -F'[= ."]' '/VERSION_ID/{print $3}' /etc/os-release)
-fi
-if [[ -z "$os_version" && -f /etc/lsb-release ]]; then
-    os_version=$(awk -F'[= ."]+' '/DISTRIB_RELEASE/{print $2}' /etc/lsb-release)
-fi
+function is_cmd_exist() {
+    local cmd="$1"
+    if [ -z "$cmd" ]; then
+        return 1
+    fi
 
-if [[ x"${release}" == x"centos" ]]; then
-    if [[ ${os_version} -le 6 ]]; then
-        echo -e "${red}请使用 CentOS 7 或更高版本的系统！${plain}\n" && exit 1
+    which "$cmd" > /dev/null 2>&1
+    if [ $? -eq 0 ]; then
+        return 0
     fi
-elif [[ x"${release}" == x"ubuntu" ]]; then
-    if [[ ${os_version} -lt 16 ]]; then
-        echo -e "${red}请使用 Ubuntu 16 或更高版本的系统！${plain}\n" && exit 1
-    fi
-elif [[ x"${release}" == x"debian" ]]; then
-    if [[ ${os_version} -lt 8 ]]; then
-        echo -e "${red}请使用 Debian 8 或更高版本的系统！${plain}\n" && exit 1
-    fi
-fi
+
+	  return 2
+}
 
 install_base() {
     if [[ x"${release}" == x"centos" ]]; then
         yum install epel-release -y
-        yum install wget curl tar crontabs socat -y
+        yum install wget curl tar crontabs socat tzdata -y
     else
-        apt install wget curl tar cron socat -y
+        apt install wget curl tar cron socat tzdata -y
     fi
 }
 
@@ -105,13 +119,13 @@ install_soga() {
     fi
 
     if  [ $# == 0 ] ;then
-        last_version=$(curl -Ls "https://api.github.com/repos/vaxilu/soga/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-        if [[ ! -n "$last_version" ]]; then
-            echo -e "${red}检测 soga 版本失败，可能是超出 Github API 限制，请稍后再试，或手动指定 soga 版本安装${plain}"
-            exit 1
-        fi
-        echo -e "检测到 soga 最新版本：${last_version}，开始安装"
-        wget -N --no-check-certificate -O /usr/local/soga.tar.gz https://github.com/vaxilu/soga/releases/download/${last_version}/soga-linux-${arch}.tar.gz
+#        last_version=$(curl -Ls "https://api.github.com/repos/vaxilu/soga/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+#        if [[ ! -n "$last_version" ]]; then
+#            echo -e "${red}检测 soga 版本失败，可能是超出 Github API 限制，请稍后再试，或手动指定 soga 版本安装${plain}"
+#            exit 1
+#        fi
+        echo -e "开始安装 soga 最新版"
+        wget -N --no-check-certificate -O /usr/local/soga.tar.gz https://github.com/vaxilu/soga/releases/latest/download/soga-linux-${arch}.tar.gz
         if [[ $? -ne 0 ]]; then
             echo -e "${red}下载 soga 失败，请确保你的服务器能够下载 Github 的文件${plain}"
             exit 1
@@ -131,6 +145,7 @@ install_soga() {
     rm soga.tar.gz -f
     cd soga
     chmod +x soga
+    last_version="$(./soga -v)"
     mkdir /etc/soga/ -p
     rm /etc/systemd/system/soga.service -f
     rm /etc/systemd/system/soga@.service -f
@@ -143,7 +158,7 @@ install_soga() {
     if [[ ! -f /etc/soga/soga.conf ]]; then
         cp soga.conf /etc/soga/
         echo -e ""
-        echo -e "全新安装，请先参看教程：https://soga.vaxilu.com/，配置必要的内容"
+        echo -e "全新安装，请先配置必要的内容"
     else
         systemctl start soga
         sleep 2
@@ -152,12 +167,15 @@ install_soga() {
         if [[ $? == 0 ]]; then
             echo -e "${green}soga 重启成功${plain}"
         else
-            echo -e "${red}soga 可能启动失败，请稍后使用 soga log 查看日志信息"
+            echo -e "${red}soga 可能启动失败，请稍后使用 soga log 查看日志信息${plain}"
         fi
     fi
 
     if [[ ! -f /etc/soga/blockList ]]; then
         cp blockList /etc/soga/
+    fi
+    if [[ ! -f /etc/soga/whiteList ]]; then
+        cp whiteList /etc/soga/
     fi
     if [[ ! -f /etc/soga/dns.yml ]]; then
         cp dns.yml /etc/soga/
@@ -180,6 +198,7 @@ install_soga() {
     echo "soga enable             - 设置 soga 开机自启"
     echo "soga disable            - 取消 soga 开机自启"
     echo "soga log                - 查看 soga 日志"
+    echo "soga log n              - 查看 soga 最后 n 行日志"
     echo "soga update             - 更新 soga"
     echo "soga update x.x.x       - 更新 soga 指定版本"
     echo "soga config             - 显示配置文件内容"
@@ -189,6 +208,12 @@ install_soga() {
     echo "soga version            - 查看 soga 版本"
     echo "------------------------------------------"
 }
+
+is_cmd_exist "systemctl"
+if [[ $? != 0 ]]; then
+    echo "systemctl 命令不存在，请使用较新版本的系统，例如 Ubuntu 18+、Debian 9+"
+    exit 1
+fi
 
 echo -e "${green}开始安装${plain}"
 install_base
